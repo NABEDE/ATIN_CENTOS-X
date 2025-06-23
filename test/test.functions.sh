@@ -33,6 +33,8 @@ else
     echo "La fonction présente des erreurs, veillez vérifier dans votre code"
 fi
 
+warn_msg "Test de la fonction warning_msg"
+
 user_interaction
 
 show_help

@@ -1,4 +1,4 @@
-
+#!/bin/bash
 # ------- Variables de configuration -----------
 # -------- Ces variables sont modifiables à tout moment -------
 

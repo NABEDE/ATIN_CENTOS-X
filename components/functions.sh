@@ -1,6 +1,6 @@
 #!/bin/bash
-source /variables.sh
-source /logo.sh
+source ./variables.sh
+source ./logo.sh
 # ---------- La partie fonction de ATIN_CENTOS ------------------
 
 # --- Fonctions d'affichage ---

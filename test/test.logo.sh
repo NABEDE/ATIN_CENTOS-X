@@ -1,3 +1,4 @@
+#!/bin/bash
 source ../components/logo.sh
 source ../components/variables.sh
 
