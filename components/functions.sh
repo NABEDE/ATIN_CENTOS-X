@@ -368,12 +368,64 @@ function switch_function {
             esac
             ;;
         9.* )
-            info_msg "Vérification de la sécurité du système"
-            if sudo dnf update && sudo dnf upgrade && sudo dnf autoremove && sudo apt-get autoclean; then
-                success_msg "Vérification de la sécurité du système réussie"
-            else
-                error_exit "La vérification de la sécurité du système a échoué"
+            info_msg "🌐 Gestion des zones de pare-feu (firewalld) - CentOS"
+
+            # Vérifie si firewalld est actif
+            if ! systemctl is-active firewalld &>/dev/null; then
+                error_msg "Le service firewalld n'est pas actif. Tentative de démarrage..."
+                if sudo systemctl start firewalld; then
+                    success_msg "firewalld a été démarré avec succès."
+                else
+                    error_exit "Impossible de démarrer firewalld. Opération annulée."
+                fi
             fi
+
+            # Liste des zones disponibles
+            info_msg "📋 Zones disponibles :"
+            mapfile -t zones < <(sudo firewall-cmd --get-zones)
+            for i in "${!zones[@]}"; do
+                printf "%3d) %s\n" $((i+1)) "${zones[$i]}"
+            done
+
+            read -rp "🔢 Entrez le numéro de la zone à modifier : " zone_index
+            if ! [[ "$zone_index" =~ ^[0-9]+$ ]] || [ "$zone_index" -lt 1 ] || [ "$zone_index" -gt "${#zones[@]}" ]; then
+                error_exit "❌ Numéro de zone invalide."
+            fi
+
+            selected_zone="${zones[$((zone_index-1))]}"
+            info_msg "🔍 Zone sélectionnée : $selected_zone"
+
+            echo "Que souhaitez-vous faire avec la zone '$selected_zone' ?"
+            echo "1) ✅ Activer (zone par défaut)"
+            echo "2) ❌ Désactiver (retirer comme zone par défaut)"
+            read -rp "👉 Entrez votre choix : " action_choice
+
+            case "$action_choice" in
+                1)
+                    if sudo firewall-cmd --set-default-zone="$selected_zone"; then
+                        success_msg "✅ La zone '$selected_zone' est maintenant la zone par défaut."
+                    else
+                        error_msg "❌ Impossible d'activer la zone '$selected_zone'."
+                    fi
+                    ;;
+                2)
+                    info_msg "ℹ️ Vous ne pouvez pas désactiver complètement une zone, mais vous pouvez la vider ou la retirer des interfaces."
+                    read -rp "🔌 Voulez-vous retirer toutes les interfaces de cette zone ? (oui/non) : " confirm_clear
+                    if [[ "$confirm_clear" =~ ^([oO][uU][iI]|[yY][eE][sS])$ ]]; then
+                        ifaces=$(sudo firewall-cmd --zone="$selected_zone" --list-interfaces)
+                        for iface in $ifaces; do
+                            sudo firewall-cmd --zone="$selected_zone" --remove-interface="$iface" --permanent
+                        done
+                        sudo firewall-cmd --reload
+                        success_msg "✅ Toutes les interfaces ont été retirées de la zone '$selected_zone'."
+                    else
+                        info_msg "⏭️ Opération annulée."
+                    fi
+                    ;;
+                *)
+                    error_msg "❗ Choix invalide. Veuillez sélectionner 1 ou 2."
+                    ;;
+            esac
             ;;
         10.* )
              info_msg 
