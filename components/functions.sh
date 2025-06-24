@@ -38,7 +38,32 @@ function warn_msg {
     echo -e "${YELLOW}AVERTISSEMENT: $1${NC}" | tee -a "$LOG_FILE" # Affiche l'avertissement en jaune gras et log
 }
 
-# ------------------ Fonction de l'interaction avec l'utilisateur dans ATIN_CENTOS ---------------------------
+# --- Fonction pour vérifier si le script est exécuté en tant que root ---
+function check_root {
+    if [ "$EUID" -ne 0 ]; then
+        echo "Ce script doit être exécuté en tant que root (sudo)."
+        exit 1
+    fi
+}
+
+# --- Fonction pour vérifier si le système d'exploitation est compatible ---
+function verification_os {
+    info_msg() { echo -e "ℹ️  $1"; }
+    success_msg() { echo -e "✅ $1"; }
+    error_exit() { echo -e "❌ $1"; exit 1; }
+
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        if [[ "$ID" == "centos" || "$ID_LIKE" == *"rhel"* ]]; then
+            version=$(grep "^VERSION_ID=" /etc/os-release | cut -d '"' -f2)
+            success_msg "Système détecté : CentOS (version $version)"
+        else
+            error_exit "Ce script est conçu uniquement pour CentOS ou dérivés RHEL. Système détecté : $ID"
+        fi
+    else
+        error_exit "/etc/os-release introuvable. Impossible de détecter l'OS."
+    fi
+}
 
 # ----------- Fonction pour afficher les éléments pour interagir avec l'utilisateur ------------------------
 function user_interaction {
@@ -88,7 +113,7 @@ function switch_function {
     #Code à utiliser (Mettre à jour tous les paquets sur Centos avec dnf): sudo dnf update --enablerepo='*'
     #Code à utiliser ( Vérification des paquets à installe ) : sudo dnf check-upgrade
 
-    case $1 in
+    case $number_for_assistance in
         1.* )
             info_msg "📦 Mise à jour des paquets CentOS..."
 
@@ -428,5 +453,141 @@ function switch_function {
             esac
             ;;
         10.* )
-             info_msg 
+            info_msg "🔄 Rechargement de la configuration du pare-feu (firewalld) - CentOS"
+
+            # Vérifier si firewalld est actif
+            if ! systemctl is-active firewalld &>/dev/null; then
+                error_msg "Le service firewalld n'est pas actif. Tentative de démarrage..."
+                if sudo systemctl start firewalld; then
+                    success_msg "✅ firewalld a été démarré avec succès."
+                else
+                    error_exit "❌ Impossible de démarrer firewalld. Rechargement annulé."
+                fi
+            fi
+
+            # Rechargement
+            info_msg "🔁 Rechargement en cours..."
+            if sudo firewall-cmd --reload; then
+                success_msg "✅ La configuration du pare-feu a été rechargée avec succès."
+            else
+                error_msg "❌ Échec du rechargement du pare-feu."
+            fi
+            ;;
+        11.* )
+        info_msg() { echo -e "ℹ️  $1"; }
+        success_msg() { echo -e "✅ $1"; }
+        error_msg() { echo -e "❌ $1"; }
+        error_exit() { error_msg "$1"; exit 1; }
+
+        install_apache() {
+            info_msg "Installation d'Apache..."
+            sudo dnf install -y httpd || error_exit "Échec de l'installation d'Apache"
+            sudo systemctl enable --now httpd
+            success_msg "Apache installé et démarré."
+        }
+
+        install_nginx() {
+            info_msg "Installation de Nginx..."
+            sudo dnf install -y nginx || error_exit "Échec de l'installation de Nginx"
+            sudo systemctl enable --now nginx
+            success_msg "Nginx installé et démarré."
+        }
+
+        install_mariadb() {
+            info_msg "Installation de MariaDB..."
+            sudo dnf install -y mariadb-server || error_exit "Échec de l'installation de MariaDB"
+            sudo systemctl enable --now mariadb
+            success_msg "MariaDB installé et démarré."
+            info_msg "Sécurisation initiale de MariaDB..."
+            sudo mysql_secure_installation
+        }
+
+        install_postgresql() {
+            info_msg "Installation de PostgreSQL..."
+            sudo dnf install -y postgresql-server postgresql || error_exit "Échec de l'installation de PostgreSQL"
+            sudo postgresql-setup --initdb
+            sudo systemctl enable --now postgresql
+            success_msg "PostgreSQL installé, initialisé et démarré."
+        }
+
+        install_php() {
+            info_msg "Installation de PHP..."
+            sudo dnf install -y php php-cli php-common php-mysqlnd || error_exit "Échec de l'installation de PHP"
+            success_msg "PHP installé."
+        }
+
+        install_mysql_client() {
+            info_msg "Installation du client MySQL..."
+            sudo dnf install -y mysql || error_exit "Échec de l'installation du client MySQL"
+            success_msg "Client MySQL installé."
+        }
+
+        install_mongodb() {
+            info_msg "Installation de MongoDB..."
+            sudo tee /etc/yum.repos.d/mongodb-org.repo > /dev/null <<EOF
+            [mongodb-org-6.0]
+            name=MongoDB Repository
+            baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/6.0/x86_64/
+            gpgcheck=1
+            enabled=1
+            gpgkey=https://www.mongodb.org/static/pgp/server-6.0.asc
+EOF
+
+
+            sudo dnf install -y mongodb-org || error_exit "Échec de l'installation de MongoDB"
+            sudo systemctl enable --now mongodb
+            success_msg "MongoDB installé et démarré."
+        }
+
+        install_python() {
+            info_msg "Installation de Python 3 et pip..."
+            sudo dnf install -y python3 python3-pip || error_exit "Échec de l'installation de Python 3"
+            success_msg "Python 3 et pip installés."
+        }
+
+        install_nodejs() {
+            info_msg "Installation de Node.js (version 18)..."
+            sudo dnf module enable -y nodejs:18 || error_exit "Échec de l'activation du module Node.js"
+            sudo dnf install -y nodejs || error_exit "Échec de l'installation de Node.js"
+            success_msg "Node.js installé."
+        }
+
+        install_full_stack() {
+            info_msg "Installation complète : Apache + PHP + MariaDB"
+            install_apache
+            install_php
+            install_mariadb
+            success_msg "Stack LAMP installée."
+        }
+
+        echo "📦 Que souhaitez-vous installer ?"
+        echo "1) 🌐 Serveur Web : Apache (httpd)"
+        echo "2) 🌐 Serveur Web : Nginx"
+        echo "3) 🗄️  Base de données : MariaDB"
+        echo "4) 🗄️  Base de données : PostgreSQL"
+        echo "5) ⚙️  Environnement : PHP"
+        echo "6) ⚙️  Environnement : MySQL (client uniquement)"
+        echo "7) ⚙️  Environnement : MongoDB"
+        echo "8) ⚙️  Environnement : Python"
+        echo "9) ⚙️  Environnement : Node.js"
+        echo "10) 🚀 Tout installer (Apache + PHP + MariaDB)"
+        read -rp "👉 Entrez le numéro de votre choix : " INSTALL_CHOICE
+
+        case "$INSTALL_CHOICE" in
+            1) install_apache ;;
+            2) install_nginx ;;
+            3) install_mariadb ;;
+            4) install_postgresql ;;
+            5) install_php ;;
+            6) install_mysql_client ;;
+            7) install_mongodb ;;
+            8) install_python ;;
+            9) install_nodejs ;;
+            10) install_full_stack ;;
+            *)
+                error_msg "Choix invalide. Veuillez sélectionner un numéro entre 1 et 10."
+                ;;
+        esac
+
+
 }
