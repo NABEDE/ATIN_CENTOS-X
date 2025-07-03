@@ -3,6 +3,8 @@ source ./variables.sh
 source ./logo.sh
 # ---------- La partie fonction de ATIN_CENTOS ------------------
 
+
+
 # --- Fonctions d'affichage ---
 function error_exit {
     echo -e "${RED}ERREUR: $1${NC}" | tee -a "$LOG_FILE" >&2 # Affiche l'erreur en rouge gras et log
@@ -588,6 +590,300 @@ EOF
                 error_msg "Choix invalide. Veuillez sélectionner un numéro entre 1 et 10."
                 ;;
         esac
+        ;;
+    
+    11*)
+        echo "🔧 Installation de composants serveur sur CentOS 8..."
 
+        # Vérification que le système est bien CentOS 8
+        if [[ -f /etc/os-release ]] && grep -q "CentOS Linux 8" /etc/os-release; then
+
+            echo "🖥️ Choisissez les composants à installer :"
+            echo "1. Apache + MariaDB + PHP (LAMP)"
+            echo "2. Nginx + PostgreSQL + Node.js"
+            echo "3. Nginx + MariaDB + PHP"
+            echo "4. Quitter"
+            read -p "👉 Entrez votre choix (1-4) : " choix
+
+            case $choix in
+                1)
+                    echo "🚀 Installation de Apache, MariaDB, PHP..."
+
+                    dnf install -y httpd mariadb-server php php-mysqlnd
+
+                    systemctl enable --now httpd
+                    systemctl enable --now mariadb
+
+                    echo "✅ Stack LAMP installée avec succès."
+                    ;;
+
+                2)
+                    echo "🚀 Installation de Nginx, PostgreSQL, Node.js..."
+
+                    dnf install -y nginx postgresql-server
+
+                    # Initialiser la base PostgreSQL
+                    postgresql-setup --initdb
+                    systemctl enable --now postgresql
+                    systemctl enable --now nginx
+
+                    # Installer Node.js (ex: version 18 via module)
+                    dnf module enable nodejs:18 -y
+                    dnf install -y nodejs
+
+                    echo "✅ Stack Nginx + PostgreSQL + Node.js installée avec succès."
+                    ;;
+
+                3)
+                    echo "🚀 Installation de Nginx, MariaDB, PHP..."
+
+                    dnf install -y nginx mariadb-server php php-fpm php-mysqlnd
+
+                    systemctl enable --now nginx
+                    systemctl enable --now mariadb
+                    systemctl enable --now php-fpm
+
+                    echo "✅ Stack Nginx + MariaDB + PHP installée avec succès."
+                    ;;
+
+                4)
+                    echo "❌ Opération annulée par l'utilisateur."
+                    ;;
+
+                *)
+                    echo "⚠️ Choix invalide. Veuillez sélectionner une option entre 1 et 4."
+                    ;;
+            esac
+        else
+            echo "❌ Ce script est prévu uniquement pour CentOS 8."
+        fi
+        ;;
+
+    12*)
+        echo "🔧 Ajout des dépôts tiers (EPEL, Remi) pour CentOS 8..."
+
+        # Vérification que le système est bien CentOS 8
+        if [[ -f /etc/os-release ]] && grep -q "CentOS Linux 8" /etc/os-release; then
+
+            # Installer EPEL
+            if ! dnf repolist | grep -q "epel"; then
+                echo "📦 Installation du dépôt EPEL..."
+                dnf install -y epel-release
+                echo "✅ EPEL installé avec succès."
+            else
+                echo "ℹ️ Le dépôt EPEL est déjà installé."
+            fi
+
+            # Installer Remi
+            if ! dnf repolist | grep -q "remi"; then
+                echo "📦 Installation du dépôt Remi..."
+                dnf install -y https://rpms.remirepo.net/enterprise/remi-release-8.rpm
+                echo "✅ Remi installé avec succès."
+            else
+                echo "ℹ️ Le dépôt Remi est déjà installé."
+            fi
+
+            # Activation d’un module PHP spécifique via Remi
+            echo "⚙️ Activation du module PHP Remi (ex : remi-php8.1)..."
+            dnf module reset php -y
+            dnf module enable php:remi-8.1 -y
+            echo "✅ Module PHP Remi activé."
+
+            echo "🎉 Dépôts EPEL et Remi ajoutés et configurés avec succès !"
+        else
+            echo "❌ Ce script est prévu uniquement pour CentOS 8."
+        fi
+        ;;
+
+    13*)
+        echo "🌐==============================================🌐"
+        echo "        AFFICHAGE DE L'ÉTAT RÉSEAU DU SYSTÈME"
+        echo "🌐==============================================🌐"
+        echo ""
+
+        # Vérification de la présence des commandes nécessaires
+        if ! command -v ip >/dev/null 2>&1; then
+            echo "❌ La commande 'ip' est introuvable. Veuillez installer le paquet 'iproute'."
+        else
+            echo "📡 Interfaces réseau détectées (commande : ip a) :"
+            echo "------------------------------------------------"
+            ip a | awk '
+                /^([0-9]+):/ { iface=$2; gsub(":", "", iface); }
+                /inet / {
+                    printf "🖧 Interface %-10s ➜ Adresse IP : %s\n", iface, $2;
+                }
+            '
+            echo ""
+        fi
+
+        if ! command -v ss >/dev/null 2>&1; then
+            echo "❌ La commande 'ss' est introuvable. Veuillez installer le paquet 'iproute'."
+        else
+            echo "🔌 Connexions réseau et ports en écoute (commande : ss -tulpn) :"
+            echo "----------------------------------------------------------------"
+            ss -tulpn | awk 'NR==1 {print "PROTO  LOCAL ADDRESS:PORT     PID/PROGRAM"}
+                             NR>1 {
+                                 printf "🔸 %-6s %-23s %-s\n", $1, $5, $7;
+                             }'
+            echo ""
+        fi
+
+        echo "✅ État réseau affiché avec succès."
+        echo ""
+        ;;
+
+    14*)
+        echo "⚙️================================================⚙️"
+        echo " CONFIGURATION DE L'ADRESSE IP (Statique ou DHCP)"
+        echo "⚙️================================================⚙️"
+        echo "Changer l'adresse IP statique ou configurer le DHCP (bien que cela soit souvent géré par NetworkManager sur les versions plus récentes)"
+        echo "⚙️================================================⚙️"
+
+        # Vérifier que nmcli est disponible
+        if ! command -v nmcli >/dev/null 2>&1; then
+            echo "❌ 'nmcli' (NetworkManager) est requis mais introuvable."
+            echo "Veuillez l’installer ou utiliser une méthode manuelle."
+            break
+        fi
+
+        # Liste des interfaces disponibles
+        echo "🔍 Interfaces réseau disponibles :"
+        nmcli device status | awk '$2 == "ethernet" {print "➡️ " $1}'
+        echo ""
+
+        read -p "📝 Entrez le nom de l'interface réseau à configurer (ex: enp0s3) : " iface
+
+        # Vérifier si l'interface existe
+        if ! nmcli device status | grep -q "^$iface"; then
+            echo "❌ L'interface $iface n'existe pas."
+            break
+        fi
+
+        echo ""
+        echo "🧭 Que souhaitez-vous faire ?"
+        echo "1. 📡 Configurer en DHCP"
+        echo "2. 🧱 Configurer une IP statique"
+        read -p "🔢 Entrez votre choix (1 ou 2) : " mode
+
+        if [[ $mode == 1 ]]; then
+            echo "🔄 Passage en mode DHCP pour l'interface $iface..."
+            nmcli con mod "$iface" ipv4.method auto
+            nmcli con up "$iface"
+            echo "✅ L'interface $iface est maintenant configurée en DHCP."
+
+        elif [[ $mode == 2 ]]; then
+            read -p "🧱 Entrez l'adresse IP statique (ex: 192.168.1.100/24) : " ip_addr
+            read -p "🌐 Entrez la passerelle (gateway) (ex: 192.168.1.1) : " gateway
+            read -p "📨 Entrez le DNS (ex: 8.8.8.8) : " dns
+
+            echo "🔧 Application de la configuration statique..."
+            nmcli con mod "$iface" ipv4.addresses "$ip_addr"
+            nmcli con mod "$iface" ipv4.gateway "$gateway"
+            nmcli con mod "$iface" ipv4.dns "$dns"
+            nmcli con mod "$iface" ipv4.method manual
+
+            nmcli con down "$iface" && nmcli con up "$iface"
+            echo "✅ IP statique appliquée à l'interface $iface."
+        else
+            echo "❌ Choix invalide."
+        fi
+        echo ""
+        ;;
+
+    15*)
+        echo -e "============================================================="
+        echo "Rechercher des erreurs ou des avertissements spécifiques dans les journaux (journalctl, /var/log/)"
+        echo "=============================================================="
+
+        echo -e "\n🧭 Que souhaitez-vous analyser ?"
+        echo "1️⃣ Journalctl (erreurs et avertissements des 24h)"
+        echo "2️⃣ Fichiers de /var/log"
+        echo "3️⃣ Tous les deux"
+        read -p "👉 Entrez votre choix (1/2/3) : " choix_logs
+
+        function analyse_journalctl() {
+            echo -e "\n🗃️ Analyse de journalctl (24 dernières heures)..."
+            echo "------------------------------------------------"
+            echo -e "\n🔴 Erreurs :"
+            journalctl --since "24 hours ago" -p err | tee /tmp/journalctl_errors.log
+
+            echo -e "\n🟡 Avertissements :"
+            journalctl --since "24 hours ago" -p warning | tee /tmp/journalctl_warnings.log
+        }
+
+        function analyse_fichiers_logs() {
+            echo -e "\n📂 Analyse des fichiers dans /var/log..."
+            echo "----------------------------------------"
+
+            log_files=(
+            /var/log/messages
+            /var/log/secure
+            /var/log/dmesg
+            /var/log/audit/audit.log
+            )
+
+            for file in "${log_files[@]}"; do
+            if [[ -f $file ]]; then
+                echo -e "\n📄 Fichier : $file"
+                echo "----------------------------"
+                grep -Ei "error|fail|warn|critical" "$file" | tail -n 10
+            else
+                echo "❌ Fichier non trouvé : $file"
+            fi
+            done
+        }
+
+        case $choix_logs in
+            1)
+            analyse_journalctl
+            ;;
+            2)
+            analyse_fichiers_logs
+            ;;
+            3)
+            analyse_journalctl
+            analyse_fichiers_logs
+            ;;
+            *)
+            echo "⛔ Choix invalide."
+            ;;
+        esac
+
+        echo -e "\n✅ Analyse terminée. Journaux enregistrés dans /tmp"
+        ;;
+
+    16*)
+    echo "🗂️  Souhaitez-vous archiver (1) ou purger (2) les anciens fichiers journaux ?"
+    echo "1️⃣  Archiver"
+    echo "2️⃣  Purger"
+    read -rp "📥 Votre choix [1-2] : " log_action
+
+    LOG_DIR="/var/log"
+    ARCHIVE_DIR="/var/log/archives"
+    DATE_SUFFIX=$(date +%Y%m%d_%H%M%S)
+
+    if [ "$log_action" == "1" ]; then
+        echo "📦 Archivage des anciens fichiers journaux..."
+        mkdir -p "$ARCHIVE_DIR"
+
+        # 🗃️ Archive tous les .log* sauf les liens symboliques
+        find "$LOG_DIR" -type f -name "*.log*" ! -name "*.gz" ! -lname "*" -exec tar -rvf "$ARCHIVE_DIR/logs_$DATE_SUFFIX.tar" {} +
+
+        # 🗜️ Compression de l'archive
+        gzip "$ARCHIVE_DIR/logs_$DATE_SUFFIX.tar"
+
+        echo "✅ Archivage terminé : $ARCHIVE_DIR/logs_$DATE_SUFFIX.tar.gz"
+
+    elif [ "$log_action" == "2" ]; then
+        echo "🧹 Purge des anciens fichiers journaux (plus de 7 jours)..."
+
+        find "$LOG_DIR" -type f -name "*.log*" -mtime +7 -exec rm -f {} \;
+
+        echo "🗑️  Purge terminée."
+
+    else
+        echo "❌ Choix invalide. Retour au menu principal."
+    fi
+    ;;
 
 }
