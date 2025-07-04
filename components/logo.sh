@@ -1,8 +1,21 @@
 #!/bin/bash
-source "${dirname "$0"}/variables.sh"
+
+# Récupère le chemin absolu du dossier où se trouve ce script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Fichier de variables à sourcer
+VARIABLES_FILE="$SCRIPT_DIR/variables.sh"
+
+# Sourcing sécurisé
+if [[ -f "$VARIABLES_FILE" ]]; then
+    source "$VARIABLES_FILE"
+else
+    echo "❌ Fichier de variables introuvable : $VARIABLES_FILE" >&2
+    exit 1
+fi
 
 function logo {
-    # Si vous voulez une version un peu plus "étoilée" visuellement
+    # Affichage du logo (inchangé)
     echo -e "${RED}*****${NC}"
     echo -e "${RED}*****${NC}"
     echo -e "${RED}*****${NC}${YELLOW}**********************************************${NC}"
@@ -21,5 +34,4 @@ function logo {
     echo -e "${RED}*****${NC}"
     echo -e "${RED}*****${NC}"
     echo -e "${RED}*****${NC}"
-
 }
